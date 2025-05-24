@@ -1,6 +1,8 @@
 from langchain_google_community import GoogleSearchAPIWrapper
 
+import os
 from langflow.custom import Component
+from langflow.inputs import MessageTextInput
 from langflow.io import IntInput, MultilineInput, Output, SecretStrInput
 from langflow.schema import DataFrame
 
@@ -32,6 +34,13 @@ class GoogleSearchAPICore(Component):
             value=4,
             required=True,
         ),
+        MessageTextInput(
+            name="proxy",
+            display_name="代理",
+            required=False,
+            info="指定代理URL",
+        ),
+
     ]
 
     outputs = [
@@ -52,6 +61,12 @@ class GoogleSearchAPICore(Component):
             return DataFrame([{"error": "Invalid Google CSE ID"}])
 
         try:
+
+            if self.proxy:
+                os.environ["http_proxy"] = self.proxy
+                os.environ["https_proxy"] = self.proxy
+                os.environ["all_proxy"] = "socks5:" + self.proxy.split(":", 1)[1]
+
             wrapper = GoogleSearchAPIWrapper(
                 google_api_key=self.google_api_key, google_cse_id=self.google_cse_id, k=self.k
             )
@@ -63,6 +78,11 @@ class GoogleSearchAPICore(Component):
             return DataFrame([{"error": f"Connection error: {e!s}"}])
         except RuntimeError as e:
             return DataFrame([{"error": f"Error occurred while searching: {e!s}"}])
+        finally:
+            if self.proxy:
+                del os.environ["http_proxy"]
+                del os.environ["https_proxy"]
+                del os.environ["all_proxy"]
 
     def build(self):
         return self.search_google
